@@ -1,0 +1,166 @@
+create database beauty_retail_store;
+
+-- Total Revenue Generated
+select sum(total_amount) as total_revenue from orders;
+
+-- Total orders
+ SELECT COUNT(order_id) AS total_orders FROM orders;
+   
+-- Number of Orders Per City
+select city, count(order_id) as no_orders  from customers inner join orders on 
+orders.customer_id=customers.customer_id group by (city);
+
+-- Top 5 Customers by Spending, who are the highest spending customer
+select customer_name, sum(total_amount) as total_spent from customers
+inner join orders
+on orders.customer_id=customers.customer_id 
+group by customer_name order by total_spent desc limit 5;
+
+-- 4. Most Sold Product Categories, which product category performed most
+select product_name,sum(total_amount) as product_amount from products
+ inner join orders
+on orders.product_id = products.product_id group by product_name order by product_amount
+desc limit 5;
+
+-- 5. Orders by Payment Status
+select payment_status, count(payment_status) as payment_stat from orders group by payment_status;
+
+-- How does revenue change monthly?
+/*SELECT
+    DATE_FORMAT(order_date, '%Y-%m') AS month,
+    SUM(total_amount) AS monthly_revenue
+FROM orders
+GROUP BY month
+ORDER BY month;*/
+SELECT
+    DATE_FORMAT(order_date, '%M %Y') AS month,
+    SUM(total_amount) AS monthly_revenue
+FROM orders
+GROUP BY month
+ORDER BY MIN(order_date);
+
+SELECT
+    MONTHNAME(order_date) AS month,
+    SUM(total_amount) AS revenue
+FROM orders
+GROUP BY MONTHNAME(order_date);
+
+-- Average Order Value Per Customer
+SELECT
+    c.customer_name,
+    AVG(o.total_amount) AS average_order_value
+FROM customers c
+INNER JOIN orders o
+    ON c.customer_id = o.customer_id
+GROUP BY c.customer_name
+ORDER BY average_order_value DESC;
+
+-- who are the loyal customers
+select customer_name, count(order_id) as total_orders from customers
+inner join orders on customers.customer_id = orders.customer_id group by
+customer_name having total_orders > 5 order by total_orders desc;
+
+-- Classify customers by spending behavior.
+select 
+customer_name,
+ sum(total_amount) as total_spent ,
+ CASE
+ when sum(total_amount) >= 1000000 then 'High value' 
+ when sum(total_amount) >= 200000 then 'Medium value'
+ else 'Low value'
+ end as customer_segment from customers inner join orders on 
+ customers.customer_id = orders.customer_id group by customer_name
+ order by total_spent desc limit 5;
+ 
+ 
+ -- Which employees generate the highest sales?
+ 
+ SELECT
+    e.employee_name,
+    SUM(o.total_amount) AS total_sales,
+    DENSE_RANK() OVER(
+        ORDER BY SUM(o.total_amount) DESC
+    ) AS sales_rank
+FROM employees e
+INNER JOIN orders o
+    ON e.employee_id = o.employee_id
+GROUP BY e.employee_name;
+
+
+-- Which products are second-best performers in each category?
+WITH ranked_products AS
+(
+    SELECT
+        p.category,
+        p.product_name,
+        SUM(o.total_amount) AS revenue,
+        ROW_NUMBER() OVER(
+            PARTITION BY p.category
+            ORDER BY SUM(o.total_amount) DESC
+        ) AS row_num
+    FROM products p
+    INNER JOIN orders o
+        ON p.product_id = o.product_id
+    GROUP BY p.category, p.product_name
+)
+
+SELECT *
+FROM ranked_products
+WHERE row_num = 2;
+
+-- Which suppliers contribute most to revenue?
+SELECT
+    p.supplier,
+    SUM(o.total_amount) AS total_revenue
+FROM products p
+INNER JOIN orders o
+    ON p.product_id = o.product_id
+GROUP BY p.supplier
+ORDER BY total_revenue DESC;
+
+-- What is the status of deliveries?
+SELECT
+    delivery_status,
+    COUNT(order_id) AS total_orders
+FROM orders
+GROUP BY delivery_status;
+
+
+-- Which customers have not ordered recently?
+/*SELECT
+    c.customer_name,
+    MAX(o.order_date) AS last_order_date
+FROM customers c
+LEFT JOIN orders o
+    ON c.customer_id = o.customer_id
+GROUP BY c.customer_name
+HAVING MAX(o.order_date) < CURRENT_DATE - INTERVAL '90 days';*/
+
+-- How much revenue was lost through refunds?
+SELECT
+    COUNT(CASE WHEN payment_status = 'Refunded' THEN 1 END) AS refunded_orders,
+    SUM(CASE WHEN payment_status = 'Refunded' THEN total_amount ELSE 0 END) AS refund_amount,
+    ROUND(
+        100.0 * COUNT(CASE WHEN payment_status = 'Refunded' THEN 1 END)
+        / COUNT(*),
+        2
+    ) AS refund_percentage
+FROM orders;
+
+
+-- How many customers returned after their first purchase?
+WITH customer_orders AS
+(
+    SELECT
+        customer_id,
+        COUNT(order_id) AS total_orders
+    FROM orders
+    GROUP BY customer_id
+)
+
+SELECT
+    COUNT(*) AS returning_customers
+FROM customer_orders
+WHERE total_orders > 1;
+
+
